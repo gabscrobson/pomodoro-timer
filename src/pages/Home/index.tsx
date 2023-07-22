@@ -2,6 +2,8 @@ import { Play } from 'phosphor-react'
 import { set, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as zod from 'zod'
+import { useEffect, useState } from 'react'
+import { differenceInSeconds } from 'date-fns'
 
 import {
   CountdownContainer,
@@ -12,7 +14,6 @@ import {
   StartCountdownButton,
   TaskInput,
 } from './styles'
-import { useState } from 'react'
 
 const newCountdownSchema = zod.object({
   task: zod.string().nonempty({ message: 'Campo obrigatório' }),
@@ -28,13 +29,16 @@ interface Cycle {
   id: string
   task: string
   minutesAmount: number
+  startDate: Date
 }
 
 export function Home() {
+  // States
   const [cycles, setCycles] = useState<Cycle[]>([])
   const [activeCycleId, setActiveCycleId] = useState<string | null>(null)
   const [amountSecondsPassed, setAmountSecondsPassed] = useState(0)
 
+  // Form handling
   const { register, handleSubmit, watch, reset, formState } =
     useForm<newCountdownFormData>({
       resolver: zodResolver(newCountdownSchema),
@@ -44,18 +48,40 @@ export function Home() {
       },
     })
 
+  // Gets the active cycle
+  const activeCycle = cycles.find((cycle) => cycle.id === activeCycleId)
+
+  // Reduces the countdown by 1 second every second
+  useEffect(() => {
+    let interval: number
+
+    if (activeCycle) {
+      interval = setInterval(() => {
+        setAmountSecondsPassed(
+          differenceInSeconds(new Date(), activeCycle.startDate),
+        )
+      }, 1000)
+    }
+    return () => {
+      clearInterval(interval)
+    }
+  }, [activeCycle])
+
+  // Handles the creation of a new cycle
   function handleStartCountdown(data: newCountdownFormData) {
     const newCycle: Cycle = {
       id: String(new Date().getTime()),
       task: data.task,
       minutesAmount: data.minutesAmount,
+      startDate: new Date(),
     }
     setCycles((state) => [...state, newCycle])
     setActiveCycleId(newCycle.id)
+    setAmountSecondsPassed(0)
     reset()
   }
 
-  const activeCycle = cycles.find((cycle) => cycle.id === activeCycleId)
+  // Variables needed to display the countdown
   const totalSeconds = activeCycle ? activeCycle.minutesAmount * 60 : 0
   const currentSeconds = activeCycle ? totalSeconds - amountSecondsPassed : 0
   const minutesLeft = Math.floor(currentSeconds / 60)
@@ -63,6 +89,14 @@ export function Home() {
   const minutesLeftString = String(minutesLeft).padStart(2, '0')
   const secondsLeftString = String(secondsLeft).padStart(2, '0')
 
+  // Sets the title of the page to the countdown
+  useEffect(() => {
+    if (activeCycle) {
+      document.title = `${minutesLeftString}:${secondsLeftString} - Pomodoro`
+    }
+  }, [minutesLeftString, secondsLeftString, activeCycle])
+
+  // Form variables
   const task = watch('task')
   const minutesAmount = watch('minutesAmount')
   const isSubmitDisabled = !task || !minutesAmount
