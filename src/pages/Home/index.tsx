@@ -1,20 +1,17 @@
 import { HandPalm, Play } from 'phosphor-react'
-import { set, useForm } from 'react-hook-form'
+import { FormProvider, set, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as zod from 'zod'
-import { useEffect, useState } from 'react'
+import { createContext, useEffect, useState } from 'react'
 import { differenceInSeconds } from 'date-fns'
 
 import {
-  CountdownContainer,
-  FormContainer,
   HomeContainer,
-  MinutesAmountInput,
-  Separator,
   StartCountdownButton,
   StopCountdownButton,
-  TaskInput,
 } from './styles'
+import { NewCycleForm } from './NewCycleForm'
+import { Countdown } from './Countdown'
 
 const newCountdownSchema = zod.object({
   task: zod.string().nonempty({ message: 'Campo obrigatório' }),
@@ -34,6 +31,17 @@ interface Cycle {
   interruptedDate?: Date
 }
 
+interface CyclesContextType {
+  activeCycle: Cycle | undefined
+  activeCycleId: string | null
+  amountSecondsPassed: number
+  markCurrentCycleAsFinished: () => void
+  markCurrentCycleAsInterrupted: () => void
+  setSecondsPassed: (seconds: number) => void
+}
+
+export const CyclesContext = createContext({} as CyclesContextType)
+
 export function Home() {
   // States
   const [cycles, setCycles] = useState<Cycle[]>([])
@@ -41,62 +49,47 @@ export function Home() {
   const [amountSecondsPassed, setAmountSecondsPassed] = useState(0)
 
   // Form handling
-  const { register, handleSubmit, watch, reset, formState } =
-    useForm<newCountdownFormData>({
-      resolver: zodResolver(newCountdownSchema),
-      defaultValues: {
-        task: '',
-        minutesAmount: 0,
-      },
-    })
+  const newCycleForm = useForm<newCountdownFormData>({
+    resolver: zodResolver(newCountdownSchema),
+    defaultValues: {
+      task: '',
+      minutesAmount: 0,
+    },
+  })
+
+  const { register, handleSubmit, watch, reset } = newCycleForm
 
   // Gets the active cycle
   const activeCycle = cycles.find((cycle) => cycle.id === activeCycleId)
 
-  // Variables needed to display the countdown
-  const totalSeconds = activeCycle ? activeCycle.minutesAmount * 60 : 0
-  const currentSeconds = activeCycle ? totalSeconds - amountSecondsPassed : 0
-  const minutesLeft = Math.floor(currentSeconds / 60)
-  const secondsLeft = currentSeconds % 60
-  const minutesLeftString = String(minutesLeft).padStart(2, '0')
-  const secondsLeftString = String(secondsLeft).padStart(2, '0')
-
-  // Reduces the countdown by 1 second every second
-  useEffect(() => {
-    let interval: number
-
-    if (activeCycle) {
-      interval = setInterval(() => {
-        const secondsDifference = differenceInSeconds(
-          new Date(),
-          activeCycle.startDate,
-        )
-
-        if (secondsDifference >= totalSeconds) {
-          setCycles((state) =>
-            state.map((cycle) => {
-              if (cycle.id === activeCycleId) {
-                return {
-                  ...cycle,
-                  interruptedDate: new Date(),
-                }
-              }
-              return cycle
-            }),
-          )
-
-          setAmountSecondsPassed(totalSeconds)
-          clearInterval(interval)
-        } else {
-          setAmountSecondsPassed(secondsDifference)
+  function markCurrentCycleAsFinished() {
+    setCycles((state) =>
+      state.map((cycle) => {
+        if (cycle.id === activeCycleId) {
+          return {
+            ...cycle,
+            interruptedDate: new Date(),
+          }
         }
-      }, 1000)
-    }
+        return cycle
+      }),
+    )
+  }
 
-    return () => {
-      clearInterval(interval)
-    }
-  }, [activeCycle, totalSeconds, cycles, activeCycleId])
+  function markCurrentCycleAsInterrupted() {
+    setCycles((state) =>
+      state.map((cycle) => {
+        if (cycle.id === activeCycleId)
+          return { ...cycle, interruptedDate: new Date() }
+        else return cycle
+      }),
+    )
+  }
+
+  // Proxies the function to send it to the Context
+  function setSecondsPassed(seconds: number) {
+    setAmountSecondsPassed(seconds)
+  }
 
   // Handles the creation of a new cycle
   function handleStartCountdown(data: newCountdownFormData) {
@@ -111,6 +104,7 @@ export function Home() {
     setAmountSecondsPassed(0)
   }
 
+  // Handles the interruption of a cycle
   function handleInterruptCycle() {
     setCycles((state) =>
       state.map((cycle) => {
@@ -125,59 +119,29 @@ export function Home() {
     reset()
   }
 
-  // Sets the title of the page to the countdown
-  useEffect(() => {
-    if (activeCycle) {
-      document.title = `${minutesLeftString}:${secondsLeftString} - Pomodoro`
-    }
-  }, [minutesLeftString, secondsLeftString, activeCycle])
-
   // Form variables
   const task = watch('task')
   const minutesAmount = watch('minutesAmount')
   const isSubmitDisabled = !task || !minutesAmount
 
+  const cyclesContextValue = {
+    activeCycle,
+    activeCycleId,
+    amountSecondsPassed,
+    markCurrentCycleAsFinished,
+    markCurrentCycleAsInterrupted,
+    setSecondsPassed,
+  }
+
   return (
     <HomeContainer>
       <form onSubmit={handleSubmit(handleStartCountdown)} action="">
-        <FormContainer>
-          <label htmlFor="task">Vou trabalhar em</label>
-          <TaskInput
-            id="task"
-            list="task-suggestions"
-            placeholder="Nome do projeto"
-            disabled={!!activeCycle}
-            {...register('task')}
-          />
-
-          <datalist id="task-suggestions">
-            <option value="Projeto 1" />
-            <option value="Projeto 2" />
-            <option value="Projeto 3" />
-            <option value="Banana" />
-          </datalist>
-
-          <label htmlFor="minutesAmount">durante</label>
-          <MinutesAmountInput
-            type="number"
-            id="minutesAmount"
-            placeholder="00"
-            step={5}
-            min={5}
-            max={60}
-            disabled={!!activeCycle}
-            {...register('minutesAmount', { valueAsNumber: true })}
-          />
-          <span>minutos.</span>
-        </FormContainer>
-
-        <CountdownContainer>
-          <span>{minutesLeftString[0]}</span>
-          <span>{minutesLeftString[1]}</span>
-          <Separator>:</Separator>
-          <span>{secondsLeftString[0]}</span>
-          <span>{secondsLeftString[1]}</span>
-        </CountdownContainer>
+        <CyclesContext.Provider value={cyclesContextValue}>
+          <FormProvider {...newCycleForm}>
+            <NewCycleForm />
+          </FormProvider>
+          <Countdown />
+        </CyclesContext.Provider>
 
         {activeCycle ? (
           <StopCountdownButton onClick={handleInterruptCycle} type="button">
