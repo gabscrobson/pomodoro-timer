@@ -1,5 +1,5 @@
 import { HandPalm, Play } from 'phosphor-react'
-import { FormProvider, set, useForm } from 'react-hook-form'
+import { FormProvider, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as zod from 'zod'
 import { useContext } from 'react'
