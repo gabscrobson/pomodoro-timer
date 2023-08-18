@@ -3,7 +3,6 @@ import { FormProvider, set, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as zod from 'zod'
 import { useContext } from 'react'
-import { differenceInSeconds } from 'date-fns'
 
 import {
   HomeContainer,
@@ -25,7 +24,7 @@ const newCountdownSchema = zod.object({
 type newCountdownFormData = zod.infer<typeof newCountdownSchema>
 
 export function Home() {
-  const { activeCycle, activeCycleId, createNewCycle, interruptCurrentCycle } =
+  const { activeCycle, createNewCycle, interruptCurrentCycle } =
     useContext(CyclesContext)
 
   // Form handling
@@ -37,7 +36,7 @@ export function Home() {
     },
   })
 
-  const { register, handleSubmit, watch, reset } = newCycleForm
+  const { handleSubmit, watch, reset } = newCycleForm
 
   // Form variables
   const task = watch('task')
